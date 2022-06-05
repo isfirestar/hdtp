@@ -1,0 +1,50 @@
+需求和问题:
+1. 自动适配老代码中的协议
+2. 支持跨板TCP通信
+3. 板内使用domain-socket进行通信
+4. 守护作为本板的服务宿主进程，对本板客户继承的跨板通信请求进行转发
+5. 只产出一个so, 该so提供服务端和客户端两部份的功能
+6. 广播自动发现周围SOC节点(IP可配，但不是动态)
+7. 关于动态IP的疑问? 虽然框架可以通过广播获取，但用户代码无从知道IP发生了变更
+8. 沿用老代码中，源/目的的索引方式(守护为0，达芬奇为1, ...)
+9. 纯中转协议，如果跨版，目前协议头不够用，可以考虑:
+    a. 使用协议头的可扩展字段去描述IP
+	b. 在协议体中描述目标IP
+10.老代码的私有协议中没有心跳号？框架还是应用代码去处理心跳? 存不存在客户进程私下与别人进行心跳的行为? 跨板只处理守护对守护!
+11.进程间消息都中转，没有P2P通道，与当时黄江生提出的效率问题冲突
+
+12. 进程序号和名称要可配置话
+
+配置节:
+1. 本地许可进程列表，名字对应其索引， 匹配老代码的  worker_process_num_address
+2. 从板IP列表， 用于守护心跳
+3. 配置话包头？巨大工作量+极低的代码可读性
+
+主从关系
+1. 心跳的断开，需要业务代码自行判断，框架不作出决定
+2. 服务端口daemon直接写道环境变量, domain-socket的文件也放到环境变量存储
+3. 需要确认， daemon主动连从dav的端口，并收心跳
+
+typedef struct  ipc_unix_header{
+	unsigned int	magic;		///<assic:U:0x55 I:0x49 P:0x50 C:0x43  magic = 0x55495043;
+	unsigned short  version;		///<通信协议头版本号高8位主版本号，低8位子版本号(主版号用于功能更新，子版本号用于性能优化，bug更新)
+	unsigned short  process_addr;  ///<高8位src process addr，低8位dst process addr
+	unsigned int 	load_type; 	///< 细化功能索引例如dsp设置编码参数load_type = 0x 1001 ,有实际业务确定
+	unsigned int  	load_len; 		///<负载 长度 实际的数据长度，不包含协议头大小
+	unsigned char	ask_or_ack;		///<ask_or_ack = 0 请求服务，ask_or_ack = 1 回应
+	unsigned char	is_need_ack;	///<is_need_ack = 1 此发送包需要回复，is_need_ack = 0  不需要回复
+	unsigned char	res[2];
+	unsigned int	thread_id;  ///client 端的请求线程标识号，非实际线程号
+	unsigned int 	option[2];	///<保留主要用于扩展
+}ipc_unix_header_t;
+
+typedef struct
+{
+	char event_type; //事件类型
+	char chan_in_master;//在主控中的对应的通道号1, 2
+	char sub_event_type; //事件子类型
+	char b_extern_data;  //是否为外部数据，本结构体包含不了的数据以外部数据发送
+	int msg_val;////本消息附件的整型值
+	int magic;//重启等关键切不频繁功能，校验
+	char msg_body[MS_MSG_BODY_MAX_LEN_SAFE];//本消息附件的信息
+}EVENT_MSG;
