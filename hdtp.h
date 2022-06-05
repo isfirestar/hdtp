@@ -51,16 +51,14 @@ enum hdtp_link_type
 };
 
 /* server creation impls */
-extern hdtp_status_t hdtp_create_server(const struct hdtp_endpoint_v4 *tcpserver, const struct hdtp_ipc_domain *ipcdomain,
+extern hdtp_status_t hdtp_create_server(const struct hdtp_endpoint_v4 *udpserver, const struct hdtp_ipc_domain *ipcdomain,
     const struct hdtp_callback_group *callbacks);
 extern void hdtp_close_server();
 
 /* client creation impls */
-extern hdtp_status_t hdtp_create_ipc_client(const struct hdtp_ipc_domain *ipcdomain,
+extern hdtp_status_t hdtp_create_ipc_client(const struct hdtp_ipc_domain *ipcdomain, const char *name,
     const struct hdtp_callback_group *callbacks, HDTPLINK *ipclink);
-extern hdtp_status_t hdtp_create_tcp_client(const struct hdtp_endpoint_v4 *tcpclient, const struct hdtp_endpoint_v4 *tcpserver,
-    const struct hdtp_callback_group *callbacks, HDTPLINK *tcplink);
-extern hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, const struct hdtp_endpoint_v4 *udpserver,
+extern hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, const struct hdtp_endpoint_v4 *udpserver, const char *name,
     const struct hdtp_callback_group *callbacks, HDTPLINK *udplink);
 
 /* below pair functions use to search a link which represent a process and send a package data to it
@@ -74,12 +72,6 @@ extern hdtp_status_t hdtp_write(HDTPLINK link, const hdtp_package_pt package);
  * but when you calling this procedure, pls think about why you have to do it? :(
  */
 extern enum hdtp_link_type hdtp_query_linktype(HDTPLINK link);
-
-/* obtain the source string of the specify link @link
- *  if this link owned by a IPC bridge, it's text is the ELF file name of execluding process
- *  NULL pointer returned when failed
- */
-extern const char *hdtp_query_linksource(HDTPLINK link, pid_t *pid);
 
 /* @hdtp_allocate_package: on a initiative request step, calling thread shall allocate a object associated HDTP package for send
  *  ignore parameter @error when you're a requester

@@ -14,12 +14,15 @@ static struct {
     struct hdtp_callback_group callbacks;
     struct hdtp_endpoint_v4 tcpserver;
     struct hdtp_endpoint_v4 tcpclient;
+    char hdtp_name[128];
+    enum hdtp_link_type link_type;
 } __client_context = {
     .ipclink = INVALID_HTCPLINK,
     .tcplink = INVALID_HTCPLINK,
     .udplink = INVALID_HUDPLINK,
     .udpserver = { .ipstrptr = NULL, .port = 0 },
     .callbacks = { NULL, NULL },
+    .link_type = HDTP_LINK_UNKNOWN,
 };
 
 static void _on_client_pre_close(HTCPLINK link)
@@ -90,7 +93,28 @@ static void _client_callback(const struct nis_event *event, const void *data)
     }
 }
 
-hdtp_status_t hdtp_create_ipc_client(const struct hdtp_ipc_domain *ipcdomain,
+static hdtp_status_t _hdtp_send_logon(const char *name)
+{
+    struct hdtp_package *logon;
+    nsp_status_t status;
+
+    /* build and send a logon package */
+    status = hdtp_allocate_package(0, kHIPT_LOGON, 0, &logon);
+    if (HDTP_SUCCESS(status)) {
+        hdtp_append_string(kHDTP_INNER_SECTION_NAME, name, logon);
+
+        if (__client_context.link_type == HDTP_LINK_UDP) {
+            status = udp_write(__client_context.udplink, logon, HDTP_BASE_HEAD_LEN + logon->low_head->len, __client_context.udpserver.ipv4str, __client_context.udpserver.port, NULL);
+        } else if (__client_context.link_type == HDTP_LINK_IPC) {
+            status = tcp_write(__client_context.ipclink, logon, HDTP_BASE_HEAD_LEN + logon->low_head->len, NULL);
+        }
+
+        hdtp_free_package(logon);
+    }
+    return status;
+}
+
+hdtp_status_t hdtp_create_ipc_client(const struct hdtp_ipc_domain *ipcdomain, const char *name,
     const struct hdtp_callback_group *callbacks, HDTPLINK *outputlink)
 {
     HTCPLINK ipclink, expect;
@@ -143,12 +167,16 @@ hdtp_status_t hdtp_create_ipc_client(const struct hdtp_ipc_domain *ipcdomain,
         if (callbacks) {
             memcpy(&__client_context.callbacks, callbacks, sizeof(__client_context.callbacks));
         }
+        strcpy(__client_context.hdtp_name, name);
+
+        __client_context.link_type = HDTP_LINK_IPC;
+        status = _hdtp_send_logon(name);
     }
 
     return status;
 }
 
-hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, const struct hdtp_endpoint_v4 *udpserver,
+hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, const struct hdtp_endpoint_v4 *udpserver, const char *name,
     const struct hdtp_callback_group *callbacks, HDTPLINK *outputlink)
 {
     HUDPLINK udplink, expect;
@@ -156,7 +184,11 @@ hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, c
 
     udp_init(2);
 
-    if (!udpserver) {
+    if (!udpserver || !name) {
+        return posix__makeerror(EINVAL);
+    }
+
+    if (!udpserver->ipstrptr) {
         return posix__makeerror(EINVAL);
     }
 
@@ -188,6 +220,9 @@ hdtp_status_t hdtp_create_udp_client(const struct hdtp_endpoint_v4 *udpclient, c
             memcpy(&__client_context.callbacks, callbacks, sizeof(__client_context.callbacks));
         }
         memcpy(&__client_context.udpserver, udpserver, sizeof(*udpserver));
+
+        __client_context.link_type = HDTP_LINK_UDP;
+        status = _hdtp_send_logon(name);
     }
 
     return status;

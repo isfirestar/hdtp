@@ -41,6 +41,17 @@ struct hdtp_package
     } u;
 };
 
+enum hdtp_inner_proto_type
+{
+    kHIPT_LOGON = 0,
+};
+
+enum hdtp_inner_section_type
+{
+    kHDTP_INNER_SECTION_PID = 0,
+    kHDTP_INNER_SECTION_NAME,
+};
+
 extern const hdtp_uint16_t HDTP_BASE_HEAD_LEN;
 
 extern nsp_status_t build_received_package(const unsigned char *data, unsigned short size, struct hdtp_package **package);
